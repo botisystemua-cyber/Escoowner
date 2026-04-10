@@ -3,7 +3,7 @@ import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide
 import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
-import { listAllUsers, type User } from '../api/users';
+import { listStaff, type User } from '../api/users';
 import { logout, type BotiSession } from '../lib/session';
 
 type Tab = 'staff' | 'online' | 'finances' | 'crm';
@@ -25,7 +25,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
     setLoading(true);
     setError('');
     try {
-      setUsers(await listAllUsers());
+      setUsers(await listStaff());
     } catch (e) {
       setError((e as Error).message || 'Помилка завантаження');
     }
@@ -35,9 +35,11 @@ export function AdminPanel({ session }: { session: BotiSession }) {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const onlineCount = users.filter(u => {
-    if (!u.last_activity) return false;
-    const t = new Date(u.last_activity).getTime();
-    if (isNaN(t)) return false;
+    if (!u.lastActive) return false;
+    // Parse "dd.MM.yyyy HH:mm" format
+    const m = u.lastActive.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+    if (!m) return false;
+    const t = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime();
     return Date.now() - t < 5 * 60 * 1000;
   }).length;
 
@@ -96,7 +98,6 @@ export function AdminPanel({ session }: { session: BotiSession }) {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
           <Logo size="sm" />
           <div className="flex items-center gap-2">
@@ -107,7 +108,6 @@ export function AdminPanel({ session }: { session: BotiSession }) {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 px-3 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 pb-[72px] lg:pb-6">
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl text-sm font-semibold text-red-600">

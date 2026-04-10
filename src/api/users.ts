@@ -1,138 +1,114 @@
-import { sheetGet, sheetPost } from './sheets';
+import { sheetPost } from './sheets';
 
 export type Role = 'Власник' | 'Менеджер' | 'Водій';
 
-export interface StaffMember {
-  id: string;         // STAFF_ID
-  full_name: string;
+// Shape returned by Script-config.gs handleGetStaff()
+export interface StaffRaw {
+  rowNum: number;
+  staffId: string;
+  name: string;
   phone: string;
   email: string;
-  role: Role;
-  login: string;
-  password: string;
-  city: string;
-  auto_id: string;
-  auto_num: string;
-  rate: string;
-  rate_currency: string;
-  status: string;     // "Активний" / "Неактивний"
-  date_hired: string;
-  last_activity: string;
-  note: string;
-}
-
-export interface Owner {
-  id: string;
-  full_name: string;
-  phone: string;
-  email: string;
-  login: string;
-  password: string;
   role: string;
+  login: string;
+  password: string;
+  city: string;
+  autoId: string;
+  autoNum: string;
+  rate: string;
+  rateCur: string;
   status: string;
-  last_activity: string;
-  date_created: string;
+  dateHired: string;
+  lastActive: string;
   note: string;
 }
 
-// Unified type for UI — owner + staff in one list
+// Unified type for UI
 export interface User {
-  id: string;
-  full_name: string;
+  staffId: string;
+  name: string;
   phone: string;
   email: string;
   role: Role;
   login: string;
   password: string;
   city: string;
-  auto_id: string;
-  auto_num: string;
+  autoId: string;
+  autoNum: string;
   rate: string;
-  rate_currency: string;
+  rateCur: string;
   status: string;
-  date_hired: string;
-  last_activity: string;
+  dateHired: string;
+  lastActive: string;
   note: string;
-  is_owner: boolean;
 }
 
-const ROLE_RANK: Record<Role, number> = { 'Власник': 3, 'Менеджер': 2, 'Водій': 1 };
-
-export function primaryRole(role: Role): Role {
-  return role;
-}
-
-export function roleRank(role: Role): number {
-  return ROLE_RANK[role] ?? 0;
-}
-
-function ownerToUser(o: Owner): User {
+function rawToUser(r: StaffRaw): User {
   return {
-    id: o.id,
-    full_name: o.full_name,
-    phone: o.phone,
-    email: o.email,
-    role: 'Власник',
-    login: o.login,
-    password: o.password,
-    city: '',
-    auto_id: '',
-    auto_num: '',
-    rate: '',
-    rate_currency: '',
-    status: o.status,
-    date_hired: o.date_created,
-    last_activity: o.last_activity,
-    note: o.note,
-    is_owner: true,
-  };
-}
-
-function staffToUser(s: StaffMember): User {
-  return {
-    ...s,
-    role: (s.role || 'Водій') as Role,
-    is_owner: false,
+    staffId: r.staffId,
+    name: r.name,
+    phone: r.phone,
+    email: r.email,
+    role: (r.role || 'Водій') as Role,
+    login: r.login,
+    password: r.password,
+    city: r.city,
+    autoId: r.autoId,
+    autoNum: r.autoNum,
+    rate: r.rate,
+    rateCur: r.rateCur,
+    status: r.status,
+    dateHired: r.dateHired,
+    lastActive: r.lastActive,
+    note: r.note,
   };
 }
 
 // ---------- API calls ----------
 
-export async function listAllUsers(): Promise<User[]> {
-  const [ownerRes, staffRes] = await Promise.all([
-    sheetGet<{ success: boolean; owner: Owner | null }>('getOwner'),
-    sheetGet<{ success: boolean; staff: StaffMember[] }>('getStaff'),
-  ]);
-  const users: User[] = [];
-  if (ownerRes.owner) users.push(ownerToUser(ownerRes.owner));
-  for (const s of staffRes.staff ?? []) {
-    users.push(staffToUser(s));
-  }
-  return users;
+export async function listStaff(): Promise<User[]> {
+  const res = await sheetPost<{ success: boolean; staff: StaffRaw[] }>('getStaff');
+  return (res.staff ?? []).map(rawToUser);
 }
 
 export async function createStaff(input: {
-  full_name: string;
+  name: string;
   phone: string;
   email: string;
-  role: Role;
+  role: string;
   login: string;
   password: string;
   city: string;
-  auto_id: string;
-  auto_num: string;
+  autoId: string;
+  autoNum: string;
   rate: string;
-  rate_currency: string;
+  rateCur: string;
   status: string;
   note: string;
-}): Promise<{ success: boolean; id: string }> {
-  return sheetPost<{ success: boolean; id: string }>('createStaff', input);
+}): Promise<{ success: boolean; staffId: string }> {
+  return sheetPost<{ success: boolean; staffId: string }>('addStaff', { staff: input });
 }
 
-export async function updateStaff(id: string, patch: Record<string, unknown>): Promise<void> {
-  await sheetPost('updateStaff', { id, ...patch });
+export async function updateStaff(staffId: string, patch: Record<string, unknown>): Promise<void> {
+  await sheetPost('updateStaff', { staff: { staffId, ...patch } });
 }
 
-export async function deleteStaff(id: string): Promise<void> {
-  await sheetPost('deleteStaff', { id });
+export async function deleteStaff(staffId: string): Promise<void> {
+  await sheetPost('deleteStaff', { staffId });
+}
+
+// Online users — pre-computed by the script
+export interface OnlineUser {
+  staffId: string;
+  name: string;
+  role: string;
+  lastActive: string;
+  status: string;
+  city: string;
+  isOnline: boolean;
+}
+
+export async function getOnlineUsers(): Promise<OnlineUser[]> {
+  const res = await sheetPost<{ success: boolean; users: OnlineUser[] }>('getOnlineUsers');
+  return res.users ?? [];
 }

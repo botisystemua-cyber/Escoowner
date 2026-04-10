@@ -19,7 +19,6 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'Всі' },
-  { key: 'Власник', label: 'Власники' },
   { key: 'Менеджер', label: 'Менеджери' },
   { key: 'Водій', label: 'Водії' },
 ];
@@ -50,15 +49,15 @@ function RoleIcon({ role, className }: { role: Role; className?: string }) {
 type FormState = {
   login: string;
   password: string;
-  full_name: string;
+  name: string;
   email: string;
   phone: string;
   role: Role;
   city: string;
-  auto_id: string;
-  auto_num: string;
+  autoId: string;
+  autoNum: string;
   rate: string;
-  rate_currency: string;
+  rateCur: string;
   status: string;
   note: string;
 };
@@ -66,15 +65,15 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   login: '',
   password: '',
-  full_name: '',
+  name: '',
   email: '',
   phone: '',
   role: 'Водій',
   city: '',
-  auto_id: '',
-  auto_num: '',
+  autoId: '',
+  autoNum: '',
   rate: '',
-  rate_currency: 'CHF',
+  rateCur: 'CHF',
   status: 'Активний',
   note: '',
 };
@@ -83,15 +82,15 @@ function userToForm(u: User): FormState {
   return {
     login: u.login ?? '',
     password: u.password ?? '',
-    full_name: u.full_name ?? '',
+    name: u.name ?? '',
     email: u.email ?? '',
     phone: u.phone ?? '',
     role: u.role || 'Водій',
     city: u.city ?? '',
-    auto_id: u.auto_id ?? '',
-    auto_num: u.auto_num ?? '',
+    autoId: u.autoId ?? '',
+    autoNum: u.autoNum ?? '',
     rate: u.rate ?? '',
-    rate_currency: u.rate_currency || 'CHF',
+    rateCur: u.rateCur || 'CHF',
     status: u.status || 'Активний',
     note: u.note ?? '',
   };
@@ -99,9 +98,6 @@ function userToForm(u: User): FormState {
 
 function humanizeError(e: unknown): string {
   const msg = (e as Error)?.message || String(e || '');
-  if (/вже існує/i.test(msg) || /зайнятий/i.test(msg)) {
-    return msg;
-  }
   return msg || 'Невідома помилка';
 }
 
@@ -125,15 +121,15 @@ export function StaffTab({
     const payload = {
       login: form.login.trim(),
       password: form.password.trim(),
-      full_name: form.full_name.trim(),
+      name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim(),
       role: form.role,
       city: form.city.trim(),
-      auto_id: form.auto_id.trim(),
-      auto_num: form.auto_num.trim(),
+      autoId: form.autoId.trim(),
+      autoNum: form.autoNum.trim(),
       rate: form.rate.trim(),
-      rate_currency: form.rate_currency.trim(),
+      rateCur: form.rateCur.trim(),
       status: form.status,
       note: form.note.trim(),
     };
@@ -141,7 +137,7 @@ export function StaffTab({
       if (isNew) {
         await createStaff(payload);
       } else if (editItem) {
-        await updateStaff(editItem.id, payload);
+        await updateStaff(editItem.staffId, payload);
       }
       setEditItem(null);
       onReload();
@@ -151,17 +147,13 @@ export function StaffTab({
   };
 
   const handleDelete = async (u: User) => {
-    if (u.is_owner) {
-      alert('Власника видалити неможливо. Редагуйте через config-crm.');
-      return;
-    }
     if (u.login === currentUserLogin) {
       alert('Ви не можете видалити власний обліковий запис.');
       return;
     }
-    if (!confirm(`Видалити ${u.full_name || u.login}?`)) return;
+    if (!confirm(`Видалити ${u.name || u.login}?`)) return;
     try {
-      await deleteStaff(u.id);
+      await deleteStaff(u.staffId);
       onReload();
     } catch (e) {
       alert('Помилка: ' + humanizeError(e));
@@ -198,18 +190,10 @@ export function StaffTab({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
           {filtered.map(u => {
             const isSelf = u.login === currentUserLogin;
-            const deleteLocked = u.is_owner || isSelf;
-            const deleteTitle = u.is_owner
-              ? 'Власника видалити неможливо'
-              : isSelf
-                ? 'Не можна видалити власний обліковий запис'
-                : 'Видалити';
             return (
             <div
-              key={u.id}
-              className={`rounded-xl lg:rounded-2xl border overflow-hidden shadow-sm ${
-                u.is_owner ? 'bg-violet-50/40 border-violet-200' : 'bg-white border-border'
-              }`}
+              key={u.staffId}
+              className="rounded-xl lg:rounded-2xl border overflow-hidden shadow-sm bg-white border-border"
             >
               <div className="p-3 lg:p-5 flex items-center gap-3 lg:gap-4">
                 <div className={`w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 ${roleBg(u.role)}`}>
@@ -218,7 +202,7 @@ export function StaffTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap">
                     <span className="text-sm lg:text-base font-bold text-text truncate">
-                      {u.full_name || <span className="italic text-muted">без імені</span>}
+                      {u.name || <span className="italic text-muted">без імені</span>}
                     </span>
                     <span className={`inline-flex items-center gap-1 text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full border ${roleBg(u.role)}`}>
                       <RoleIcon role={u.role} className="w-3 h-3" />
@@ -240,26 +224,26 @@ export function StaffTab({
                     {u.phone && <span className="ml-2 lg:ml-3">{u.phone}</span>}
                     {u.email && <span className="ml-2 lg:ml-3 truncate">{u.email}</span>}
                   </div>
-                  {(u.city || u.auto_num) && (
+                  {(u.city || u.autoNum) && (
                     <div className="flex items-center gap-2 lg:gap-3 mt-0.5 lg:mt-1 text-[10px] lg:text-xs text-muted/70">
                       {u.city && (
                         <span className="flex items-center gap-0.5">
                           <MapPin className="w-3 h-3" />{u.city}
                         </span>
                       )}
-                      {u.auto_num && (
+                      {u.autoNum && (
                         <span className="flex items-center gap-0.5">
-                          <Car className="w-3 h-3" />{u.auto_num}
+                          <Car className="w-3 h-3" />{u.autoNum}
                         </span>
                       )}
                       {u.rate && (
-                        <span>{u.rate} {u.rate_currency}</span>
+                        <span>{u.rate} {u.rateCur}</span>
                       )}
                     </div>
                   )}
-                  {u.last_activity && (
+                  {u.lastActive && (
                     <div className="text-[10px] lg:text-xs text-muted/60 mt-0.5 lg:mt-1">
-                      Остання активність: {u.last_activity}
+                      Остання активність: {u.lastActive}
                     </div>
                   )}
                 </div>
@@ -270,10 +254,10 @@ export function StaffTab({
                   </button>
                   <button
                     onClick={() => handleDelete(u)}
-                    disabled={deleteLocked}
-                    title={deleteTitle}
+                    disabled={isSelf}
+                    title={isSelf ? 'Не можна видалити власний обліковий запис' : 'Видалити'}
                     className={`p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl transition-all ${
-                      deleteLocked
+                      isSelf
                         ? 'opacity-30 cursor-not-allowed'
                         : 'hover:bg-red-50 cursor-pointer'
                     }`}
@@ -292,7 +276,6 @@ export function StaffTab({
         <UserModal
           initial={isNew ? EMPTY_FORM : userToForm(editItem)}
           isNew={isNew}
-          isOwner={!isNew && editItem.is_owner}
           onClose={() => setEditItem(null)}
           onSave={handleSave}
         />
@@ -302,11 +285,10 @@ export function StaffTab({
 }
 
 function UserModal({
-  initial, isNew, isOwner, onClose, onSave,
+  initial, isNew, onClose, onSave,
 }: {
   initial: FormState;
   isNew: boolean;
-  isOwner: boolean;
   onClose: () => void;
   onSave: (f: FormState) => Promise<void>;
 }) {
@@ -316,7 +298,7 @@ function UserModal({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
-  const ALL_ROLES: Role[] = ['Водій', 'Менеджер', 'Власник'];
+  const ALL_ROLES: Role[] = ['Водій', 'Менеджер'];
 
   const submit = async () => {
     if (!form.login.trim() || !form.password.trim()) {
@@ -346,17 +328,16 @@ function UserModal({
             <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1.5 lg:mb-2">
               Роль
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {ALL_ROLES.map(role => {
                 const active = form.role === role;
                 return (
                   <button
                     key={role}
-                    onClick={() => !isOwner && set('role', role)}
-                    disabled={isOwner}
-                    className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold transition-all ${
+                    onClick={() => set('role', role)}
+                    className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold cursor-pointer transition-all ${
                       active ? roleActiveClass(role) : 'bg-bg text-muted border border-border hover:bg-white'
-                    } ${isOwner ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                    }`}
                   >
                     <RoleIcon role={role} className="w-4 h-4 lg:w-5 lg:h-5" />
                     {ROLE_LABEL[role]}
@@ -364,14 +345,9 @@ function UserModal({
                 );
               })}
             </div>
-            {isOwner && (
-              <div className="mt-2 text-[11px] text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                Роль власника редагується тільки в config-crm.
-              </div>
-            )}
           </div>
 
-          <F label="ПІБ" value={form.full_name} onChange={v => set('full_name', v)} autoFocus />
+          <F label="ПІБ" value={form.name} onChange={v => set('name', v)} autoFocus />
           <div className="grid grid-cols-2 gap-3 lg:gap-4">
             <F label="Телефон" value={form.phone} onChange={v => set('phone', v)} type="tel" />
             <F label="Email" value={form.email} onChange={v => set('email', v)} type="email" />
@@ -382,19 +358,19 @@ function UserModal({
           </div>
 
           {/* Driver-specific fields */}
-          {(form.role === 'Водій' || form.city || form.auto_num) && (
+          {(form.role === 'Водій' || form.city || form.autoNum) && (
             <>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <F label="Місто базування" value={form.city} onChange={v => set('city', v)} />
-                <F label="Номер авто" value={form.auto_num} onChange={v => set('auto_num', v)} />
+                <F label="Номер авто" value={form.autoNum} onChange={v => set('autoNum', v)} />
               </div>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <F label="Ставка" value={form.rate} onChange={v => set('rate', v)} />
                 <div>
                   <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1 lg:mb-1.5">Валюта ставки</label>
                   <select
-                    value={form.rate_currency}
-                    onChange={e => set('rate_currency', e.target.value)}
+                    value={form.rateCur}
+                    onChange={e => set('rateCur', e.target.value)}
                     className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border border-border rounded-xl text-sm text-text focus:outline-none focus:border-brand transition-all"
                   >
                     {['CHF', 'EUR', 'USD', 'UAH', 'PLN', 'CZK'].map(c => (
