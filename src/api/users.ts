@@ -125,7 +125,7 @@ export async function createStaff(input: {
   rate_currency: string;
   status: string;
   note: string;
-}): Promise<{ id: string }> {
+}): Promise<{ success: boolean; id: string }> {
   return sheetPost<{ success: boolean; id: string }>('createStaff', input);
 }
 
