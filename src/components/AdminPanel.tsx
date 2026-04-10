@@ -12,7 +12,7 @@ const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Us
   { key: 'staff', label: 'Співробітники', shortLabel: 'Команда', icon: Users },
   { key: 'online', label: 'Онлайн', shortLabel: 'Онлайн', icon: Wifi },
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
-  { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/' },
+  { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '/Esco_Express/' },
 ];
 
 export function AdminPanel({ session }: { session: BotiSession }) {
