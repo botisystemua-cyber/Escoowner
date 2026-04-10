@@ -3,8 +3,8 @@ import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide
 import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
-import { listUsersByTenant, type User } from '../api/users';
-import { logout, beatHeartbeat, type BotiSession } from '../lib/session';
+import { listAllUsers, type User } from '../api/users';
+import { logout, type BotiSession } from '../lib/session';
 
 type Tab = 'staff' | 'online' | 'finances' | 'crm';
 
@@ -14,15 +14,6 @@ const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Us
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
   { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/' },
 ];
-
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 min
-
-function isOnline(u: User): boolean {
-  if (!u.last_login) return false;
-  const t = new Date(u.last_login).getTime();
-  if (isNaN(t)) return false;
-  return Date.now() - t < ONLINE_THRESHOLD_MS;
-}
 
 export function AdminPanel({ session }: { session: BotiSession }) {
   const [tab, setTab] = useState<Tab>('staff');
@@ -34,40 +25,21 @@ export function AdminPanel({ session }: { session: BotiSession }) {
     setLoading(true);
     setError('');
     try {
-      setUsers(await listUsersByTenant(session.tenant_id));
+      setUsers(await listAllUsers());
     } catch (e) {
       setError((e as Error).message || 'Помилка завантаження');
     }
     setLoading(false);
-  }, [session.tenant_id]);
+  }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Poll online status every 30s (refetch users so last_login updates)
-  useEffect(() => {
-    const iv = setInterval(() => {
-      listUsersByTenant(session.tenant_id).then(setUsers).catch(() => { /* ignore */ });
-    }, 30000);
-    return () => clearInterval(iv);
-  }, [session.tenant_id]);
-
-  // Heartbeat — mark this user as "online" every 60s while the tab is visible.
-  // Without this, `users.last_login` only updates at login and the Online tab
-  // would only see users for the first 5 minutes of their session.
-  useEffect(() => {
-    const beat = () => {
-      if (document.visibilityState === 'visible') beatHeartbeat(session);
-    };
-    beat(); // fire immediately on mount
-    const iv = setInterval(beat, 60000);
-    document.addEventListener('visibilitychange', beat);
-    return () => {
-      clearInterval(iv);
-      document.removeEventListener('visibilitychange', beat);
-    };
-  }, [session]);
-
-  const onlineCount = users.filter(isOnline).length;
+  const onlineCount = users.filter(u => {
+    if (!u.last_activity) return false;
+    const t = new Date(u.last_activity).getTime();
+    if (isNaN(t)) return false;
+    return Date.now() - t < 5 * 60 * 1000;
+  }).length;
 
   const handleTabClick = (item: typeof MENU_ITEMS[0]) => {
     if (item.external) {
@@ -79,12 +51,12 @@ export function AdminPanel({ session }: { session: BotiSession }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col lg:flex-row">
-      {/* ═══ Sidebar — desktop ═══ */}
+      {/* Sidebar — desktop */}
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
           <Logo size="md" />
-          <div className="mt-3 text-xs font-bold text-text truncate">{session.tenant_name}</div>
-          <div className="text-[11px] text-muted truncate">{session.user_name}</div>
+          <div className="mt-3 text-xs font-bold text-text truncate">{session.user_name || 'Власник'}</div>
+          <div className="text-[11px] text-muted truncate">{session.user_login}</div>
         </div>
         <nav className="flex-1 px-4 py-5 space-y-1.5">
           {MENU_ITEMS.map(item => {
@@ -122,13 +94,13 @@ export function AdminPanel({ session }: { session: BotiSession }) {
         </div>
       </aside>
 
-      {/* ═══ Main area ═══ */}
+      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
           <Logo size="sm" />
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.tenant_name}</span>
+            <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.user_name || 'Власник'}</span>
             <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
               <LogOut className="w-4 h-4 text-muted" />
             </button>
@@ -152,7 +124,6 @@ export function AdminPanel({ session }: { session: BotiSession }) {
               {tab === 'staff' && (
                 <StaffTab
                   users={users}
-                  tenantId={session.tenant_id}
                   currentUserLogin={session.user_login}
                   onReload={loadAll}
                 />
@@ -172,7 +143,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
         </main>
       </div>
 
-      {/* ═══ Mobile bottom tab bar ═══ */}
+      {/* Mobile bottom tab bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-border px-2 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around py-1.5">
           {MENU_ITEMS.map(item => {

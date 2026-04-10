@@ -1,32 +1,31 @@
 import { RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
 import type { User, Role } from '../api/users';
-import { sortRoles } from '../api/users';
 
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 min
 
 const ROLE_LABEL: Record<Role, string> = {
-  owner: 'Власник',
-  manager: 'Менеджер',
-  driver: 'Водій',
+  'Власник': 'Власник',
+  'Менеджер': 'Менеджер',
+  'Водій': 'Водій',
 };
 
 function roleBg(role: Role) {
-  if (role === 'owner') return 'bg-violet-50 text-violet-600';
-  if (role === 'manager') return 'bg-blue-50 text-blue-600';
+  if (role === 'Власник') return 'bg-violet-50 text-violet-600';
+  if (role === 'Менеджер') return 'bg-blue-50 text-blue-600';
   return 'bg-emerald-50 text-emerald-600';
 }
 
 function isOnline(u: User): boolean {
-  if (!u.last_login) return false;
-  const t = new Date(u.last_login).getTime();
+  if (!u.last_activity) return false;
+  const t = new Date(u.last_activity).getTime();
   if (isNaN(t)) return false;
   return Date.now() - t < ONLINE_THRESHOLD_MS;
 }
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return 'ніколи';
-  const t = new Date(iso).getTime();
-  if (isNaN(t)) return 'ніколи';
+function formatRelative(s: string | null): string {
+  if (!s) return 'ніколи';
+  const t = new Date(s).getTime();
+  if (isNaN(t)) return s; // fallback to raw string if not a parseable date
   const diffSec = Math.floor((Date.now() - t) / 1000);
   if (diffSec < 60) return `${diffSec} с тому`;
   const diffMin = Math.floor(diffSec / 60);
@@ -35,7 +34,7 @@ function formatRelative(iso: string | null): string {
   if (diffHr < 24) return `${diffHr} год тому`;
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 30) return `${diffDay} дн тому`;
-  return new Date(iso).toLocaleDateString('uk-UA');
+  return new Date(s).toLocaleDateString('uk-UA');
 }
 
 export function OnlineTab({ users, onReload }: { users: User[]; onReload: () => void }) {
@@ -99,17 +98,15 @@ function UserCard({ user, online }: { user: User; online: boolean }) {
           <span className="text-sm lg:text-base font-bold text-text">
             {user.full_name || user.login}
           </span>
-          {sortRoles(user.roles ?? []).map(r => (
-            <span key={r} className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full ${roleBg(r)}`}>
-              {ROLE_LABEL[r]}
-            </span>
-          ))}
+          <span className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full ${roleBg(user.role)}`}>
+            {ROLE_LABEL[user.role]}
+          </span>
         </div>
         <div className="flex items-center gap-2 lg:gap-3 mt-0.5 lg:mt-1 flex-wrap">
           <span className="font-mono text-[11px] lg:text-xs text-muted">{user.login}</span>
           <span className="flex items-center gap-1 text-[10px] lg:text-xs text-muted">
             <Clock className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
-            {formatRelative(user.last_login)}
+            {formatRelative(user.last_activity)}
           </span>
         </div>
       </div>

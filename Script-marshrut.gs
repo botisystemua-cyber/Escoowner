@@ -258,6 +258,11 @@ function doGet(e) {
       case 'searchArchive':
         var q = (e && e.parameter) ? (e.parameter.q || '') : '';
         return respond(searchArchive(q));
+      // --- Owner CRM: CONFIG endpoints ---
+      case 'getOwner':
+        return respond(getOwner_());
+      case 'getStaff':
+        return respond(getStaff_());
       default:
         return respond({ success: false, error: 'Невідома GET дія: ' + action });
     }
@@ -317,6 +322,17 @@ function doPost(e) {
         return respond(buildRouteSummary(data));
       case 'saveRouteSummary':
         return respond(saveRouteSummary(data));
+      // --- Owner CRM: CONFIG endpoints ---
+      case 'getOwner':
+        return respond(getOwner_());
+      case 'getStaff':
+        return respond(getStaff_());
+      case 'createStaff':
+        return respond(createStaff_(payload));
+      case 'updateStaff':
+        return respond(updateStaff_(payload));
+      case 'deleteStaff':
+        return respond(deleteStaff_(payload));
       default:
         return respond({ success: false, error: 'Невідома дія: ' + action });
     }
@@ -2123,4 +2139,263 @@ function menuShowMetaVersions() {
     }
   }
   SpreadsheetApp.getUi().alert('Версії _meta', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// ============================================
+// OWNER CRM — робота з CONFIG таблицею
+// Аркуш "Власник": 15 колонок (A-O)
+// Аркуш "Персонал": 16 колонок (A-P)
+// ============================================
+
+var COL_OWNER = {
+  USER_ID: 0,           // A
+  FULL_NAME: 1,         // B — Піб
+  PHONE: 2,             // C — Телефон
+  EMAIL: 3,             // D — EMAIL
+  LOGIN: 4,             // E — Логін
+  PASSWORD_HASH: 5,     // F — PASSWORD_HASH
+  TOKEN_API: 6,         // G — Токен API
+  ROLE: 7,              // H — Роль
+  ACCESS: 8,            // I — Доступ до таблиць
+  TWO_FA: 9,            // J — 2FA активно
+  STATUS: 10,           // K — Статус
+  DATE_CREATED: 11,     // L — Дата створення
+  LAST_ACTIVITY: 12,    // M — Остання активність
+  DATE_PWD_CHANGE: 13,  // N — Дата зміни пароля
+  NOTE: 14              // O — Примітка
+};
+
+var COL_STAFF = {
+  STAFF_ID: 0,          // A
+  FULL_NAME: 1,         // B — Піб
+  PHONE: 2,             // C — Телефон
+  EMAIL: 3,             // D — EMAIL
+  ROLE: 4,              // E — Роль
+  LOGIN: 5,             // F — Логін
+  PASSWORD_HASH: 6,     // G — PASSWORD_HASH
+  CITY: 7,              // H — Місто базування
+  AUTO_ID: 8,           // I — AUTO_ID
+  AUTO_NUM: 9,          // J — Номер авто
+  RATE: 10,             // K — Ставка
+  RATE_CUR: 11,         // L — Валюта ставки
+  STATUS: 12,           // M — Статус
+  DATE_HIRED: 13,       // N — Дата прийому
+  LAST_ACTIVITY: 14,    // O — Остання активність
+  NOTE: 15              // P — Примітка
+};
+
+// ---------- getOwner_ ----------
+function getOwner_() {
+  try {
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Власник');
+    if (!sheet) return { success: false, error: 'Аркуш "Власник" не знайдено' };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, owner: null };
+    var row = sheet.getRange(2, 1, 1, 15).getValues()[0];
+    return {
+      success: true,
+      owner: {
+        id: str(row[COL_OWNER.USER_ID]),
+        full_name: str(row[COL_OWNER.FULL_NAME]),
+        phone: str(row[COL_OWNER.PHONE]),
+        email: str(row[COL_OWNER.EMAIL]),
+        login: str(row[COL_OWNER.LOGIN]),
+        password: str(row[COL_OWNER.PASSWORD_HASH]),
+        role: str(row[COL_OWNER.ROLE]),
+        status: str(row[COL_OWNER.STATUS]),
+        last_activity: str(row[COL_OWNER.LAST_ACTIVITY]),
+        date_created: str(row[COL_OWNER.DATE_CREATED]),
+        note: str(row[COL_OWNER.NOTE])
+      }
+    };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ---------- getStaff_ ----------
+function getStaff_() {
+  try {
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Персонал');
+    if (!sheet) return { success: false, error: 'Аркуш "Персонал" не знайдено' };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, staff: [] };
+    var data = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
+    var staff = [];
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var staffId = str(row[COL_STAFF.STAFF_ID]);
+      if (!staffId) continue;
+      staff.push({
+        id: staffId,
+        full_name: str(row[COL_STAFF.FULL_NAME]),
+        phone: str(row[COL_STAFF.PHONE]),
+        email: str(row[COL_STAFF.EMAIL]),
+        role: str(row[COL_STAFF.ROLE]),
+        login: str(row[COL_STAFF.LOGIN]),
+        password: str(row[COL_STAFF.PASSWORD_HASH]),
+        city: str(row[COL_STAFF.CITY]),
+        auto_id: str(row[COL_STAFF.AUTO_ID]),
+        auto_num: str(row[COL_STAFF.AUTO_NUM]),
+        rate: str(row[COL_STAFF.RATE]),
+        rate_currency: str(row[COL_STAFF.RATE_CUR]),
+        status: str(row[COL_STAFF.STATUS]),
+        date_hired: str(row[COL_STAFF.DATE_HIRED]),
+        last_activity: str(row[COL_STAFF.LAST_ACTIVITY]),
+        note: str(row[COL_STAFF.NOTE])
+      });
+    }
+    return { success: true, staff: staff };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ---------- createStaff_ ----------
+function createStaff_(p) {
+  try {
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Персонал');
+    if (!sheet) return { success: false, error: 'Аркуш "Персонал" не знайдено' };
+
+    // Перевірка на дублікат логіна
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      var logins = sheet.getRange(2, COL_STAFF.LOGIN + 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < logins.length; i++) {
+        if (str(logins[i][0]).toLowerCase() === str(p.login).toLowerCase()) {
+          return { success: false, error: 'Користувач з логіном "' + p.login + '" вже існує' };
+        }
+      }
+    }
+
+    var now = new Date();
+    var dateStr = Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd HH:mm:ss');
+    var staffId = 'STF-' + Utilities.formatDate(now, 'Europe/Kiev', 'yyyyMMdd') + '-' + Math.floor(Math.random() * 9000 + 1000);
+
+    var newRow = new Array(16).fill('');
+    newRow[COL_STAFF.STAFF_ID] = staffId;
+    newRow[COL_STAFF.FULL_NAME] = p.full_name || '';
+    newRow[COL_STAFF.PHONE] = p.phone || '';
+    newRow[COL_STAFF.EMAIL] = p.email || '';
+    newRow[COL_STAFF.ROLE] = p.role || 'Водій';
+    newRow[COL_STAFF.LOGIN] = p.login || '';
+    newRow[COL_STAFF.PASSWORD_HASH] = p.password || '';
+    newRow[COL_STAFF.CITY] = p.city || '';
+    newRow[COL_STAFF.AUTO_ID] = p.auto_id || '';
+    newRow[COL_STAFF.AUTO_NUM] = p.auto_num || '';
+    newRow[COL_STAFF.RATE] = p.rate || '';
+    newRow[COL_STAFF.RATE_CUR] = p.rate_currency || '';
+    newRow[COL_STAFF.STATUS] = p.status || 'Активний';
+    newRow[COL_STAFF.DATE_HIRED] = dateStr;
+    newRow[COL_STAFF.LAST_ACTIVITY] = '';
+    newRow[COL_STAFF.NOTE] = p.note || '';
+
+    sheet.appendRow(newRow);
+
+    // Записуємо в "Паролі"
+    writePasswordLog_(staffId, p.full_name || '', p.role || 'Водій', p.phone || '', p.login || '', p.password || '');
+
+    return { success: true, id: staffId, message: 'Працівника створено' };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ---------- updateStaff_ ----------
+function updateStaff_(p) {
+  try {
+    if (!p.id) return { success: false, error: 'Не вказано id працівника' };
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Персонал');
+    if (!sheet) return { success: false, error: 'Аркуш "Персонал" не знайдено' };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Працівника не знайдено' };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var targetRow = -1;
+    for (var i = 0; i < ids.length; i++) {
+      if (str(ids[i][0]) === p.id) { targetRow = i + 2; break; }
+    }
+    if (targetRow === -1) return { success: false, error: 'Працівника з id "' + p.id + '" не знайдено' };
+
+    // Перевірка на дублікат логіна (крім поточного)
+    if (p.login) {
+      var logins = sheet.getRange(2, COL_STAFF.LOGIN + 1, lastRow - 1, 1).getValues();
+      for (var j = 0; j < logins.length; j++) {
+        if (j + 2 !== targetRow && str(logins[j][0]).toLowerCase() === str(p.login).toLowerCase()) {
+          return { success: false, error: 'Логін "' + p.login + '" вже зайнятий іншим працівником' };
+        }
+      }
+    }
+
+    var row = sheet.getRange(targetRow, 1, 1, 16).getValues()[0];
+    var oldPassword = str(row[COL_STAFF.PASSWORD_HASH]);
+
+    if (p.full_name !== undefined)    sheet.getRange(targetRow, COL_STAFF.FULL_NAME + 1).setValue(p.full_name);
+    if (p.phone !== undefined)        sheet.getRange(targetRow, COL_STAFF.PHONE + 1).setValue(p.phone);
+    if (p.email !== undefined)        sheet.getRange(targetRow, COL_STAFF.EMAIL + 1).setValue(p.email);
+    if (p.role !== undefined)         sheet.getRange(targetRow, COL_STAFF.ROLE + 1).setValue(p.role);
+    if (p.login !== undefined)        sheet.getRange(targetRow, COL_STAFF.LOGIN + 1).setValue(p.login);
+    if (p.password !== undefined)     sheet.getRange(targetRow, COL_STAFF.PASSWORD_HASH + 1).setValue(p.password);
+    if (p.city !== undefined)         sheet.getRange(targetRow, COL_STAFF.CITY + 1).setValue(p.city);
+    if (p.auto_id !== undefined)      sheet.getRange(targetRow, COL_STAFF.AUTO_ID + 1).setValue(p.auto_id);
+    if (p.auto_num !== undefined)     sheet.getRange(targetRow, COL_STAFF.AUTO_NUM + 1).setValue(p.auto_num);
+    if (p.rate !== undefined)         sheet.getRange(targetRow, COL_STAFF.RATE + 1).setValue(p.rate);
+    if (p.rate_currency !== undefined) sheet.getRange(targetRow, COL_STAFF.RATE_CUR + 1).setValue(p.rate_currency);
+    if (p.status !== undefined)       sheet.getRange(targetRow, COL_STAFF.STATUS + 1).setValue(p.status);
+    if (p.note !== undefined)         sheet.getRange(targetRow, COL_STAFF.NOTE + 1).setValue(p.note);
+
+    // Якщо пароль змінився — записуємо в "Паролі"
+    if (p.password !== undefined && p.password !== oldPassword) {
+      writePasswordLog_(p.id, p.full_name || str(row[COL_STAFF.FULL_NAME]), p.role || str(row[COL_STAFF.ROLE]),
+        p.phone || str(row[COL_STAFF.PHONE]), p.login || str(row[COL_STAFF.LOGIN]), p.password);
+    }
+
+    return { success: true, message: 'Працівника оновлено' };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ---------- deleteStaff_ ----------
+function deleteStaff_(p) {
+  try {
+    if (!p.id) return { success: false, error: 'Не вказано id працівника' };
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Персонал');
+    if (!sheet) return { success: false, error: 'Аркуш "Персонал" не знайдено' };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Працівника не знайдено' };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var targetRow = -1;
+    for (var i = 0; i < ids.length; i++) {
+      if (str(ids[i][0]) === p.id) { targetRow = i + 2; break; }
+    }
+    if (targetRow === -1) return { success: false, error: 'Працівника з id "' + p.id + '" не знайдено' };
+
+    sheet.deleteRow(targetRow);
+    return { success: true, message: 'Працівника видалено' };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ---------- writePasswordLog_ ----------
+function writePasswordLog_(userId, fullName, role, phone, login, password) {
+  try {
+    var ss = openSS_('CONFIG');
+    var sheet = ss.getSheetByName('Паролі');
+    if (!sheet) return;
+    var now = new Date();
+    var dateStr = Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd HH:mm:ss');
+    var pwdId = 'PWD-' + Utilities.formatDate(now, 'Europe/Kiev', 'yyyyMMdd') + '-' + Math.floor(Math.random() * 9000 + 1000);
+    sheet.appendRow([
+      pwdId, userId, fullName, role, phone, login,
+      password, 'Встановлено', '', '', '', '', 'Власник', dateStr, ''
+    ]);
+  } catch (e) { /* silent */ }
 }

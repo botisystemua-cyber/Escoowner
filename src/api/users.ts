@@ -1,74 +1,138 @@
-import { supabase } from '../lib/supabase';
+import { sheetGet, sheetPost } from './sheets';
 
-export type Role = 'owner' | 'manager' | 'driver';
+export type Role = 'Власник' | 'Менеджер' | 'Водій';
 
-export interface User {
-  id: string;
-  tenant_id: string;
+export interface StaffMember {
+  id: string;         // STAFF_ID
+  full_name: string;
+  phone: string;
+  email: string;
+  role: Role;
   login: string;
   password: string;
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-  roles: Role[];
-  is_active: boolean | null;
-  last_login: string | null;
-  created_at: string;
-  updated_at: string;
+  city: string;
+  auto_id: string;
+  auto_num: string;
+  rate: string;
+  rate_currency: string;
+  status: string;     // "Активний" / "Неактивний"
+  date_hired: string;
+  last_activity: string;
+  note: string;
 }
 
-export type UserInput = Omit<User, 'id' | 'created_at' | 'updated_at' | 'last_login'>;
-
-// Role hierarchy used for primary-icon selection and badge ordering.
-// Higher = more privileged. A user with ['owner','driver'] is visually
-// presented as an owner first, because that's the "highest hat" they wear.
-const ROLE_RANK: Record<Role, number> = { owner: 3, manager: 2, driver: 1 };
-
-/** Highest role in the user's roles array. Caller guarantees non-empty. */
-export function primaryRole(roles: Role[]): Role {
-  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0];
+export interface Owner {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  login: string;
+  password: string;
+  role: string;
+  status: string;
+  last_activity: string;
+  date_created: string;
+  note: string;
 }
 
-/** Sort roles from highest to lowest privilege for consistent badge order. */
-export function sortRoles(roles: Role[]): Role[] {
-  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a]);
+// Unified type for UI — owner + staff in one list
+export interface User {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  role: Role;
+  login: string;
+  password: string;
+  city: string;
+  auto_id: string;
+  auto_num: string;
+  rate: string;
+  rate_currency: string;
+  status: string;
+  date_hired: string;
+  last_activity: string;
+  note: string;
+  is_owner: boolean;
 }
 
-export async function listUsersByTenant(tenantId: string): Promise<User[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as User[];
+const ROLE_RANK: Record<Role, number> = { 'Власник': 3, 'Менеджер': 2, 'Водій': 1 };
+
+export function primaryRole(role: Role): Role {
+  return role;
 }
 
-export async function createUserForTenant(
-  tenantId: string,
-  input: Omit<UserInput, 'tenant_id'>,
-): Promise<User> {
-  const { data, error } = await supabase
-    .from('users')
-    .insert({ ...input, tenant_id: tenantId })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as User;
+export function roleRank(role: Role): number {
+  return ROLE_RANK[role] ?? 0;
 }
 
-export async function updateUser(id: string, patch: Partial<UserInput>): Promise<User> {
-  const { data, error } = await supabase
-    .from('users')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as User;
+function ownerToUser(o: Owner): User {
+  return {
+    id: o.id,
+    full_name: o.full_name,
+    phone: o.phone,
+    email: o.email,
+    role: 'Власник',
+    login: o.login,
+    password: o.password,
+    city: '',
+    auto_id: '',
+    auto_num: '',
+    rate: '',
+    rate_currency: '',
+    status: o.status,
+    date_hired: o.date_created,
+    last_activity: o.last_activity,
+    note: o.note,
+    is_owner: true,
+  };
 }
 
-export async function deleteUser(id: string): Promise<void> {
-  const { error } = await supabase.from('users').delete().eq('id', id);
-  if (error) throw error;
+function staffToUser(s: StaffMember): User {
+  return {
+    ...s,
+    role: (s.role || 'Водій') as Role,
+    is_owner: false,
+  };
+}
+
+// ---------- API calls ----------
+
+export async function listAllUsers(): Promise<User[]> {
+  const [ownerRes, staffRes] = await Promise.all([
+    sheetGet<{ success: boolean; owner: Owner | null }>('getOwner'),
+    sheetGet<{ success: boolean; staff: StaffMember[] }>('getStaff'),
+  ]);
+  const users: User[] = [];
+  if (ownerRes.owner) users.push(ownerToUser(ownerRes.owner));
+  for (const s of staffRes.staff ?? []) {
+    users.push(staffToUser(s));
+  }
+  return users;
+}
+
+export async function createStaff(input: {
+  full_name: string;
+  phone: string;
+  email: string;
+  role: Role;
+  login: string;
+  password: string;
+  city: string;
+  auto_id: string;
+  auto_num: string;
+  rate: string;
+  rate_currency: string;
+  status: string;
+  note: string;
+}): Promise<{ id: string }> {
+  return sheetPost<{ success: boolean; id: string }>('createStaff', input);
+}
+
+export async function updateStaff(id: string, patch: Record<string, unknown>): Promise<void> {
+  await sheetPost('updateStaff', { id, ...patch });
+}
+
+export async function deleteStaff(id: string): Promise<void> {
+  await sheetPost('deleteStaff', { id });
 }
