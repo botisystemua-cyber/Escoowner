@@ -9,12 +9,12 @@ export function Logo({ size = 'lg' }: { size?: 'lg' | 'md' | 'sm' }) {
   const s = sizeMap[size];
   return (
     <div className="flex items-center justify-center gap-2">
-      <div className={`${s.box} rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20`}>
+      <div className={`${s.box} rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/20`}>
         <Truck className={`${s.icon} text-white`} />
       </div>
       <span className={`${s.text} font-black tracking-tight`}>
-        <span className="text-text">Boti</span>
-        <span className="text-success">Logistics</span>
+        <span className="text-blue-600">Esco</span>
+        <span className="text-yellow-500">Express</span>
       </span>
     </div>
   );

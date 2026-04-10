@@ -5,7 +5,7 @@ import {
   MapPin, Car,
 } from 'lucide-react';
 import {
-  createStaff, updateStaff, deleteStaff,
+  createStaff, updateStaff, deleteStaff, updateOwner,
   type User, type Role,
 } from '../api/users';
 
@@ -19,6 +19,7 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'Всі' },
+  { key: 'Власник', label: 'Власники' },
   { key: 'Менеджер', label: 'Менеджери' },
   { key: 'Водій', label: 'Водії' },
 ];
@@ -136,6 +137,8 @@ export function StaffTab({
     try {
       if (isNew) {
         await createStaff(payload);
+      } else if (editItem?.isOwner) {
+        await updateOwner(editItem.staffId, payload);
       } else if (editItem) {
         await updateStaff(editItem.staffId, payload);
       }
@@ -147,8 +150,8 @@ export function StaffTab({
   };
 
   const handleDelete = async (u: User) => {
-    if (u.login === currentUserLogin) {
-      alert('Ви не можете видалити власний обліковий запис.');
+    if (u.isOwner || u.login === currentUserLogin) {
+      alert('Ви не можете видалити цей обліковий запис.');
       return;
     }
     if (!confirm(`Видалити ${u.name || u.login}?`)) return;
@@ -190,6 +193,7 @@ export function StaffTab({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
           {filtered.map(u => {
             const isSelf = u.login === currentUserLogin;
+            const noDelete = isSelf || !!u.isOwner;
             return (
             <div
               key={u.staffId}
@@ -254,10 +258,10 @@ export function StaffTab({
                   </button>
                   <button
                     onClick={() => handleDelete(u)}
-                    disabled={isSelf}
-                    title={isSelf ? 'Не можна видалити власний обліковий запис' : 'Видалити'}
+                    disabled={noDelete}
+                    title={noDelete ? 'Не можна видалити цей обліковий запис' : 'Видалити'}
                     className={`p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl transition-all ${
-                      isSelf
+                      noDelete
                         ? 'opacity-30 cursor-not-allowed'
                         : 'hover:bg-red-50 cursor-pointer'
                     }`}
@@ -276,6 +280,7 @@ export function StaffTab({
         <UserModal
           initial={isNew ? EMPTY_FORM : userToForm(editItem)}
           isNew={isNew}
+          isOwner={!!editItem.isOwner}
           onClose={() => setEditItem(null)}
           onSave={handleSave}
         />
@@ -285,10 +290,11 @@ export function StaffTab({
 }
 
 function UserModal({
-  initial, isNew, onClose, onSave,
+  initial, isNew, isOwner, onClose, onSave,
 }: {
   initial: FormState;
   isNew: boolean;
+  isOwner: boolean;
   onClose: () => void;
   onSave: (f: FormState) => Promise<void>;
 }) {
@@ -328,23 +334,30 @@ function UserModal({
             <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1.5 lg:mb-2">
               Роль
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {ALL_ROLES.map(role => {
-                const active = form.role === role;
-                return (
-                  <button
-                    key={role}
-                    onClick={() => set('role', role)}
-                    className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold cursor-pointer transition-all ${
-                      active ? roleActiveClass(role) : 'bg-bg text-muted border border-border hover:bg-white'
-                    }`}
-                  >
-                    <RoleIcon role={role} className="w-4 h-4 lg:w-5 lg:h-5" />
-                    {ROLE_LABEL[role]}
-                  </button>
-                );
-              })}
-            </div>
+            {isOwner ? (
+              <div className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold ${roleActiveClass('Власник')}`}>
+                <RoleIcon role="Власник" className="w-4 h-4 lg:w-5 lg:h-5" />
+                {ROLE_LABEL['Власник']}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {ALL_ROLES.map(role => {
+                  const active = form.role === role;
+                  return (
+                    <button
+                      key={role}
+                      onClick={() => set('role', role)}
+                      className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold cursor-pointer transition-all ${
+                        active ? roleActiveClass(role) : 'bg-bg text-muted border border-border hover:bg-white'
+                      }`}
+                    >
+                      <RoleIcon role={role} className="w-4 h-4 lg:w-5 lg:h-5" />
+                      {ROLE_LABEL[role]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <F label="ПІБ" value={form.name} onChange={v => set('name', v)} autoFocus />
@@ -358,7 +371,7 @@ function UserModal({
           </div>
 
           {/* Driver-specific fields */}
-          {(form.role === 'Водій' || form.city || form.autoNum) && (
+          {!isOwner && (form.role === 'Водій' || form.city || form.autoNum) && (
             <>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <F label="Місто базування" value={form.city} onChange={v => set('city', v)} />

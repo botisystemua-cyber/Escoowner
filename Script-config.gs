@@ -479,6 +479,67 @@ function handleGetOnlineUsers() {
 }
 
 // ========================================
+// READ/UPDATE: Власник
+// ========================================
+function handleGetOwner() {
+  var d = getSheetData('Власник');
+  var owners = [];
+  for (var i = 0; i < d.data.length; i++) {
+    var r = d.data[i];
+    owners.push({
+      userId: String(r[OWN.USER_ID] || ''),
+      name: String(r[OWN.NAME] || ''),
+      phone: String(r[OWN.PHONE] || ''),
+      email: String(r[OWN.EMAIL] || ''),
+      login: String(r[OWN.LOGIN] || ''),
+      password: String(r[OWN.PASSWORD_HASH] || ''),
+      role: 'Власник',
+      status: String(r[OWN.STATUS] || ''),
+      dateCreated: String(r[OWN.DATE_CREATED] || ''),
+      lastActive: String(r[OWN.LAST_ACTIVE] || ''),
+      note: String(r[OWN.NOTE] || '')
+    });
+  }
+  return { success: true, owners: owners };
+}
+
+function handleUpdateOwner(params) {
+  var o = params.owner || {};
+  var userId = String(o.userId || '');
+  if (!userId) return { success: false, error: 'userId обов\'язковий' };
+
+  var ss = SpreadsheetApp.openById(CONFIG_SS_ID);
+  var sh = ss.getSheetByName('Власник');
+  if (!sh) return { success: false, error: 'Аркуш не знайдено' };
+
+  var data = sh.getDataRange().getValues();
+  var rowNum = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][OWN.USER_ID]).trim() === userId) {
+      rowNum = i + 1;
+      break;
+    }
+  }
+  if (rowNum === -1) return { success: false, error: 'Власника не знайдено' };
+
+  var lastCol = sh.getLastColumn();
+  var range = sh.getRange(rowNum, 1, 1, lastCol);
+  var vals = range.getValues()[0];
+
+  if (o.name) vals[OWN.NAME] = o.name;
+  if (o.phone) vals[OWN.PHONE] = o.phone;
+  if (o.email) vals[OWN.EMAIL] = o.email;
+  if (o.password) {
+    vals[OWN.PASSWORD_HASH] = o.password;
+    vals[OWN.DATE_PWD_CHANGE] = Utilities.formatDate(new Date(), 'Europe/Kiev', 'dd.MM.yyyy HH:mm');
+  }
+  if (o.note !== undefined) vals[OWN.NOTE] = o.note;
+
+  range.setValues([vals]);
+  return { success: true };
+}
+
+// ========================================
 // CORS + doPost / doGet
 // ========================================
 function doPost(e) {
@@ -504,6 +565,12 @@ function doPost(e) {
     // Staff CRUD
     case 'getStaff':
       result = handleGetStaff();
+      break;
+    case 'getOwner':
+      result = handleGetOwner();
+      break;
+    case 'updateOwner':
+      result = handleUpdateOwner(body);
       break;
     case 'addStaff':
       result = handleAddStaff(body);

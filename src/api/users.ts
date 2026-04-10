@@ -41,6 +41,22 @@ export interface User {
   dateHired: string;
   lastActive: string;
   note: string;
+  isOwner?: boolean;
+}
+
+// Shape returned by Script-config.gs handleGetOwner()
+export interface OwnerRaw {
+  userId: string;
+  name: string;
+  phone: string;
+  email: string;
+  login: string;
+  password: string;
+  role: string;
+  status: string;
+  dateCreated: string;
+  lastActive: string;
+  note: string;
 }
 
 function rawToUser(r: StaffRaw): User {
@@ -95,6 +111,35 @@ export async function updateStaff(staffId: string, patch: Record<string, unknown
 
 export async function deleteStaff(staffId: string): Promise<void> {
   await sheetPost('deleteStaff', { staffId });
+}
+
+// ---------- Owner API calls ----------
+
+export async function getOwner(): Promise<User[]> {
+  const res = await sheetPost<{ success: boolean; owners: OwnerRaw[] }>('getOwner');
+  return (res.owners ?? []).map(o => ({
+    staffId: o.userId,
+    name: o.name,
+    phone: o.phone,
+    email: o.email,
+    role: 'Власник' as Role,
+    login: o.login,
+    password: o.password,
+    city: '',
+    autoId: '',
+    autoNum: '',
+    rate: '',
+    rateCur: '',
+    status: o.status,
+    dateHired: o.dateCreated,
+    lastActive: o.lastActive,
+    note: o.note,
+    isOwner: true,
+  }));
+}
+
+export async function updateOwner(userId: string, patch: Record<string, unknown>): Promise<void> {
+  await sheetPost('updateOwner', { owner: { userId, ...patch } });
 }
 
 // Online users — pre-computed by the script

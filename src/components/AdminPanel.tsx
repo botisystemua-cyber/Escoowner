@@ -3,7 +3,7 @@ import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide
 import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
-import { listStaff, type User } from '../api/users';
+import { listStaff, getOwner, type User } from '../api/users';
 import { logout, type BotiSession } from '../lib/session';
 
 type Tab = 'staff' | 'online' | 'finances' | 'crm';
@@ -25,7 +25,8 @@ export function AdminPanel({ session }: { session: BotiSession }) {
     setLoading(true);
     setError('');
     try {
-      setUsers(await listStaff());
+      const [staff, owners] = await Promise.all([listStaff(), getOwner()]);
+      setUsers([...owners, ...staff]);
     } catch (e) {
       setError((e as Error).message || 'Помилка завантаження');
     }
@@ -92,7 +93,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
           </button>
         </div>
         <div className="px-6 pb-5 text-xs text-muted/50 font-medium">
-          <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> Owner v1.0
+          <span className="text-blue-600/40 font-bold">Esco</span><span className="text-yellow-500/40 font-bold">Express</span> Owner v1.0
         </div>
       </aside>
 
